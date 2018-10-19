@@ -1,0 +1,261 @@
+---
+title: " Spatial summation of signals from individual cones in human color vision"
+author: "[Brian P. Schmidt](https://bps10.github.io), Alexandra E. Boehm, William S Tuten, Austin Roorda"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+# Introduction
+
+Primary sensory neurons transduce external stimuli into chemical and electrical signals that provide an organisms with real-time information about the environment. On a cellular scale these signals are noisy and ambiguous. One strategy for reducing uncertainty is to pools signals across multiple detectors. Under low light conditions, for example, the visual system integrates information across cone photoreceptors. How signals from cones are pooled in daylight to produce color sensation is not known at a cellular scale. We used an adaptive optics microstimulator to target individual and pairs of cones with light and recorded the associated percept. Our findings demonstrate that, on small scales, the visual system averages information across cones when generating color sensations.
+
+# Experimental Methods
+Two male and one female subject were enrolled in the study. Each session began by capturing a high-resolution image of the subject’s cone mosaic. From that image, three contiguous cones were selected for study (Figure 1A). During each trial of the session, the selected cones were targeted with small spots of light (543 nm; 0.35 arcmin; 500 ms) following established procedures (Harmening et al. 2014). The intensity of each spot was fixed based on threshold judgments (85% frequency of seeing) made prior to the start of the experiment. Subjects judged the hue and saturation of each trial with a scaling procedure (Schmidt et al. 2018).  Each cone and pair were tested 12 times; trials were randomly interleaved. The background in both experiments was a low photopic white (40 cd/m2). Cone mosaics were classified (L,M,S) with AOSLO densitometry in two subjects (Sabesan et al. 2015).
+
+# Data processing
+
+1. Load data from CSV file. This file contains all 4000+ trials that were completed by the three subjects. Below we will convert the type of a few columns, filter out bad trials and compute some summary statistics to do sanity checks. 
+```{r loadData, results="hide", message=FALSE}
+setwd("~/R/TwoConeColorSummation")
+
+library(tidyverse)
+library(car)
+library(RColorBrewer)
+library(ggthemes)
+trial_data <- read_csv('all_trial_data.csv')
+# remove the first column which is a zerobased index created in Pandas
+trial_data <- trial_data %>% select(-X1)
+
+```
+
+2. The column isPair is meant to be a logical.
+```{r}
+trial_data <- mutate(trial_data, isPair=as.logical(isPair))
+```
+
+3. Filter out trials with bad deliveries. Bad deliveries are defined as errors greater than 0.35 arcmin. In those trials, we cannot be confident that the correct cone was targeted. Values below 0.01 indicate that there was a problem with the delivery because a value of 0 error cannot occur naturally.
+```{r}
+trial_data <- filter(trial_data, delivery_error < 0.35)
+trial_data <- filter(trial_data, delivery_error > 0.01)
+```
+
+4. Compute frequency of seeing (FoS) for S- and L/M-cones. FoS serves as a sanity check: it should be close to zero in the case of S-cones (because they are insensitive to the stimulus) and 0.85 in the case of L/M-cones (because we set it there).
+```{r}
+Scones <- filter(trial_data, type1 == 1 | type2 == 1)
+Scones <- filter(Scones, isPair == FALSE)
+
+FoS <- sum(!is.na(Scones$by)) / length(Scones$delivery_error)
+FoS
+
+FoS <- sum(!is.na(trial_data$by)) / length(trial_data$delivery_error)
+FoS
+
+```
+
+5. Remove S-cones and not seen trials. S-cones are controls and are not needed for further analysis. 
+```{r}
+trial_data <- filter(trial_data, type1 != 1 | type2 != 1)
+trial_data <- filter(trial_data, !is.na(by))
+```
+
+6. Add a type ID where 1M=2, 1L=3, 2M=4, L+M=5, 2L=6 and unknown = 0. The data set contains trials in which individual or pairs of cones were stimulated. For some analyses, we want to know the type tested and whether it was a pair or a single cone. Now that we have removed S-cones from the data, the only possible values are 2, 3, 4, 5, 6 and 0 (the mosaic from subject 20075 has not been classified).
+```{r}
+trial_data <- mutate(trial_data, 
+                     typeID=if_else(trial_data$isPair, 
+                                    trial_data$type1 + trial_data$type2,
+                                    trial_data$type1))
+```
+
+7. Compute saturation and add it as a column with mutate. Below we see a plot of saturation as a function of type ID. There are no systematic differences besides ID=0, which are unclassified cones from S20075.
+```{r, fig1b,echo=FALSE,fig.height=3, fig.width=9}
+trial_data <- mutate(trial_data, saturation = abs(by) + abs(rg))
+
+ggplot(trial_data, aes(x=saturation)) + 
+  geom_histogram(binwidth=0.1) + facet_grid(. ~ typeID)
+```
+
+8. Finally, we summarize delivery error and plot a histogram. The resulting distribution is close to normal with a mean of 0.19 arcmin and a standard deviation of 0.036. 4,087 trials were included in the analysis.
+```{r delivery, fig.height=3}
+summarize(trial_data, mean=mean(delivery_error), 
+          std=sd(delivery_error), N=length(delivery_error))
+
+g <- ggplot(trial_data, aes(delivery_error)) + 
+  geom_histogram(bins = 30)
+g
+```
+
+# Results
+
+## Cone type predicts response
+
+We first grouped each trial based on the subject and type of cone or pair probed. The mean blue-yellow (by) and red-green (rg) dimension are reported below. The table provides a sense that the typeID was predictive of the color report. In both subjects with classified cones, typeID 2 and 4 produced rg means that were greater than zero, while 3 and 6 led to negative values. This is interesting because typeID=2 & 4 are when a single or pair of M-cones were targeted and 3 & 6 were when one or two L-cones were targeted. As a first pass, this suggests that cone type may be predictive of the color reported by the subject. We will explore this observation in more detail below.
+```{r}
+typeGroup <- trial_data %>%
+  group_by(., subject, typeID) %>% 
+  summarise(., by_mean=mean(by), by_std=sd(by), 
+            rg_mean=mean(rg), rg_std=sd(rg), N=length(rg))
+typeGroup
+```
+
+We next grouped each trial based on targeted location.
+```{r}
+singleAndPairs <- trial_data %>%
+  group_by(., subject, masterID1, masterID2) %>% 
+  summarise_all(., mean)
+
+boundary <- data.frame(x=c(-1, 0, 1, 0, -1), y=c(0, 1, 0, -1, 0))
+
+ggplot(data=singleAndPairs, aes(x=by, y=rg, color=as.factor(typeID))) + 
+  geom_point(alpha=0.4, size=0.4) +
+  facet_grid(. ~ subject) +
+  geom_rug(alpha=0.4) + 
+  coord_equal(xlim=c(-1, 1), ylim=c(-1, 1)) + 
+  xlab('(yellow - blue) / total') + ylab('(green - red) / total') + 
+  scale_color_manual(
+    values = c("black", "green", "red", "green", "yellow", "red"), 
+    name="spectral type",
+    labels = c("unknown", "M", "L", "M+M", "L+M", "L+L")) +
+  #scale_color_brewer(palette = "Spectral") +
+  geom_path(data = boundary, aes(x=x, y=y), colour='gray', linetype=2)
+
+ggsave("lms_UAD.pdf")
+```
+
+There are a few things to notice in the above plots. Firstly, there is some individual variability. S20075 used blue more frequently than the two other subjects and S10001 did not report yellow in any trials. However, the general patterns are similar. Most of the variance was found along the green-red dimension and there were no points that fell in the blueish-red or greenish-yellow dimension. In the two subjects with classified mosaics, we additionally see that L-cone targeted trials tended to fall along the red region of this space, while M-cones were more likely to fall in the green dimension.
+
+## Mosaic parameters do not predict responses
+Next, we grouped the data according to the number of cones targeted (one or two), the session in which trial occurred and the specific cone(s) that was targeted. The mean and count was then computed for each cone(s). Next, we select only those cones pairs which had at least four good trials. Finally, the length columns are dropped and columns are renamed to remove "_mean" so that the original names are preserved.
+```{r}
+singleConesSummary <- trial_data %>% 
+  filter(., isPair==FALSE) %>% 
+  group_by(., subject, session, masterID1) %>%   
+  summarise_all(., c("mean", "length")) %>%
+  filter(., by_length > 3) %>%
+  select(., -contains("_length")) %>%
+  rename_(.dots=setNames(names(.), gsub("_mean", "", names(.))))
+
+twoConesSummary <- trial_data %>% 
+  filter(., isPair==TRUE) %>% 
+  group_by(., subject, session, masterID1, masterID2) %>%
+  summarise_all(., c("mean", "length")) %>%
+  filter(., by_length > 3) %>%
+  select(., -contains("_length")) %>%
+  rename_(.dots=setNames(names(.), gsub("_mean", "", names(.))))
+```
+
+Using the data generated above, we visualized the relationship between measured response dimensions and predictor variables for the one and two cone conditions.
+```{r}
+# scatterplotMatrix with car package
+scatterplotMatrix(singleConesSummary[ ,c("by", "rg", "saturation", 
+                                         "lConeNeighbors")],
+                  diagonal=list(method ="histogram"),
+                  ellipse=FALSE)
+
+scatterplotMatrix(twoConesSummary[ ,c("by", "rg", "saturation", 
+                                      "lConeNeighbors",
+                                      "distance_btwn_cones_pix")],
+                  diagonal=list(method ="histogram"),
+                  ellipse=FALSE)
+```
+
+
+None of the above correlation plots demonstrate a strong relationship. The local neighborhood surrounding a cone is typically thought to be an important factor in generating color sensations. However, we do not find a strong relationship. We also did not observe a strong relationship between the distance between cones (plotted here in pixels) and color or saturation judgments. Cone pairs were never separated by more than one cone, which likely explains why there was no relationship.
+
+## Two cone responses are an average of individual reports
+Finally, we were interested in whether the reports from from each individual cones in a pair predicted the color they produced when stimulated together. To answer this question, we created a merged data frame with the responses from each individual cone matched up with the judgments from their paired stimulation.
+```{r}
+merged1 <- merge(twoConesSummary, 
+           singleConesSummary %>% select(., subject, session, 
+                                         masterID1, by, rg, lConeNeighbors), 
+           by=c("subject", "session", "masterID1"))
+merged1 <- merged1 %>% rename(., by12=by.x, rg12=rg.x, by1=by.y, rg1=rg.y,
+                  lConeNeighbors12=lConeNeighbors.x, 
+                  lConeNeighbors1=lConeNeighbors.y)
+
+sessionMerge <- merge(merged1, 
+           singleConesSummary %>% 
+             select(., subject, session, masterID1, 
+                    by, rg, lConeNeighbors), 
+           by.x=c("subject", "session", "masterID2"),
+           by.y=c("subject", "session", "masterID1"))
+sessionMerge <-  sessionMerge %>% rename(., by2=by, rg2=rg, 
+                   ConeNeighbors2=lConeNeighbors)
+
+sessionMerge <- mutate(sessionMerge, saturation12=abs(by12) + abs(rg12))
+sessionMerge <- mutate(sessionMerge, saturation1=abs(by1) + abs(rg1))
+sessionMerge <- mutate(sessionMerge, saturation2=abs(by2) + abs(rg2))
+
+```
+
+A linear model predicts the results based on an average of the individual responses.
+```{r}
+mod <- lm((rg1 + rg2) / 2 ~ rg12, sessionMerge)
+summary.lm(mod)
+```
+
+Visualization of how well paired stimulation was predicted by individual cone responses.
+```{r}
+unity = data.frame(x=c(-1, 1), y=c(-1, 1))
+ggplot(data=sessionMerge, aes(x=(rg1 + rg2) / 2, y=rg12)) + 
+  geom_point() +
+  geom_smooth(method=lm) +
+  coord_equal(xlim=c(-1, 1), ylim=c(-1, 1)) +
+  geom_path(data=unity, aes(x=x, y=y), colour='gray', linetype=1) +
+  ggtitle('green - red / total') +
+  geom_path(data=unity, aes(x=x, y=y), colour='gray', linetype=1) +
+  xlab('average of individual responses') + ylab('observed two-cone response') #+ theme_classic(base_size=15)
+
+ggsave("prediction.pdf")
+```
+
+## Pairs with the same type are more saturated than predicted by average
+
+Finally, we look at the error terms of our prediction as a function of the cone types probed.
+```{r}
+ggplot(data=filter(sessionMerge, typeID > 3),
+       aes(x=(saturation1 + saturation2) / 2, 
+           y=saturation12, color=as.factor(typeID))) + 
+  geom_point() + 
+  ylab('observed saturation') +
+  xlab('predicted saturation (average of individual)') +
+  coord_equal(xlim=c(0, 1), ylim=c(0, 1)) +
+  scale_color_manual(values = c("green", "yellow", "red"),
+                     name="spectral type",
+                     labels = c("M+M", "L+M", "L+L")) +
+  geom_path(data=unity, aes(x=x, y=y), colour='gray', linetype=1)
+
+```
+
+Notice that the L+L and M+M pairs tend to fall above the unity line. This is especially true as saturation increases. In contrast, the L+M pairs fall below the line. These observations indicate that the cones with the same spectral type produced slightly more saturated reports than predicted by the average of their individual responses.
+
+```{r}
+ggplot(data=filter(sessionMerge, typeID > 3), 
+       aes(x=saturation12 - ((saturation1 + saturation2) / 2), 
+           fill=as.factor(typeID))) + 
+  geom_histogram(binwidth=0.1, position='dodge') +
+  scale_fill_manual(
+    values = c("green", "yellow", "red"), 
+    name="spectral type",
+    labels = c("M+M", "L+M", "L+L")) + 
+  xlab("observed - predicted saturation")
+ggsave('observed-predicted.pdf')
+
+```
+
+These trends were quantified directly by taking the difference between the observed and predicted saturation judgments. The histogram below illustrates the point outlined above. As the t-test's below demonstrate, the L+M pairs were significantly less saturated (more white) than a simple average of their individual responses, while the opposite was true for cones with the same spectral type.
+```{r}
+sessionMerge <- mutate(sessionMerge, 
+                       diff_from_prediction=saturation12 - 
+                         ((saturation1 + saturation2) / 2))
+t.test(sessionMerge[sessionMerge$typeID == 5, ]$diff_from_prediction)
+t.test(sessionMerge[sessionMerge$typeID == 4 | 
+                      sessionMerge$typeID == 6, ]$diff_from_prediction)
+t.test(sessionMerge[sessionMerge$typeID == 5, ]$diff_from_prediction, 
+       sessionMerge[sessionMerge$typeID == 4 |
+                      sessionMerge$typeID == 6, ]$diff_from_prediction)
+```
+
+# Conclusions
+
