@@ -3,3 +3,5 @@
 analyses.R
 .Rhistory
 old/*
+.log
+*.log
