@@ -78,7 +78,7 @@ trial_data <- filter(trial_data, type1 != 1 & type2 != 1)
 trial_data <- filter(trial_data, !is.na(yb))
 ```
 
-4. The remaining dataset contained trials in which individual or pairs of L- and M-cones were stimulated (N=4,087). For some analyses, we wanted to know both the type tested and whether it was a pair or a single cone. To facilitate these analyses, a type ID was created in which  unknown-cone = 0, unknown-pair=1, 1M=2, 1L=3, 2M=4, L+M=5 and 2L=6. Note: S-cones were already removed from the data and the mosaic of subject 20075 has not been classified.
+4. The remaining dataset contained trials in which individual or pairs of L- and M-cones were stimulated (N=4,057). For some analyses, we wanted to know both the type tested and whether it was a pair or a single cone. To facilitate these analyses, a type ID was created in which  unknown-cone = 0, unknown-pair=1, 1M=2, 1L=3, 2M=4, L+M=5 and 2L=6. Note: S-cones were already removed from the data and the mosaic of subject 20075 has not been classified.
 
 ```{r, echo=FALSE}
 trial_data <- trial_data %>%
@@ -166,12 +166,13 @@ These plots illustrate the spread of responses collected from each cone or pair 
 Also similar to previous findings, color reports varied even between cones with the same photopigment (Schmidt et al. 2018). Some L-cones, for instance, elicited highly saturated red sensations, while a majority produce white or desaturated pink reports. We next asked whether the variability in sensations between cones with the same sensitivity could be explained by low level features of the mosaic. Specifically, can we predict whether an L-cone will produce a saturated red or a desaturated pink based on the surrounding cone types or the delivery error? And in the case of cone pairs, did the distance between the two cones influence color appearance? To answer these question, we grouped responses according to the number of cones targeted (one or two), the session in which trial occurred and the specific cone(s) that was targeted. The mean and count was then computed for each cone(s). Only those cones pairs which had at least four good trials were analyzed.
 
 ```{r, echo=FALSE}
+minTrials <- 5
 singleConesSummary <- trial_data %>% 
   select(., -typeIDstr) %>%
   filter(., isPair==FALSE) %>% 
   group_by(., subject, session, masterID1) %>%   
   summarise_all(., c("mean", "length")) %>%
-  filter(., yb_length > 3) %>%
+  filter(., yb_length >= minTrials) %>%
   select(., -contains("_length")) %>%
   rename_(.dots=setNames(names(.), gsub("_mean", "", names(.))))
 
@@ -180,7 +181,7 @@ twoConesSummary <- trial_data %>%
   filter(., isPair==TRUE) %>% 
   group_by(., subject, session, masterID1, masterID2) %>%
   summarise_all(., c("mean", "length")) %>%
-  filter(., yb_length > 3) %>%
+  filter(., yb_length >= minTrials) %>%
   select(., -contains("_length")) %>%
   rename_(.dots=setNames(names(.), gsub("_mean", "", names(.))))
 ```
@@ -219,7 +220,7 @@ singleConesSummary <- trial_data %>%
   filter(., isPair==FALSE) %>% 
   group_by(., subject, session, masterID1) %>%   
   summarise_all(., c("mean", "length")) %>%
-  filter(., yb_length > 3) %>%
+  filter(., yb_length >= minTrials) %>%
   select(., -contains("_length")) %>%
   rename_(.dots=setNames(names(.), gsub("_mean", "", names(.))))
 
@@ -228,7 +229,7 @@ twoConesSummary <- trial_data %>%
   filter(., isPair==TRUE) %>% 
   group_by(., subject, session, masterID1, masterID2) %>%
   summarise_all(., c("mean", "length")) %>%
-  filter(., yb_length > 3) %>%
+  filter(., yb_length >= minTrials) %>%
   select(., -contains("_length")) %>%
   rename_(.dots=setNames(names(.), gsub("_mean", "", names(.))))
 
@@ -253,9 +254,21 @@ sessionMerge <- merged1 %>%
 
 We then fit a linear model to the data. Behavioral reports from two cone stimulation were predicted by an average of the individual responses: $gr_{12} = (gr_1 + gr_2) / 2$. Below is a visualization of the measured responses against the predictions.
 
+
+```{r, echo=FALSE}
+sessionMerge['predictedYB'] = (sessionMerge$yb1 + sessionMerge$yb2) / 2
+sessionMerge['predictedGR'] = (sessionMerge$gr1 + sessionMerge$gr2) / 2
+sessionMerge['predictedSaturation'] = abs(sessionMerge$predictedYB) + abs(sessionMerge$predictedGR)
+
+# Add a column w difference from prediction
+sessionMerge <- mutate(sessionMerge, 
+                       diff_from_prediction=saturation12 - predictedSaturation)
+
+```
+
 ```{r, fig.height=3.5, fig.width=5.5, echo=FALSE, message=FALSE}
 unity = data.frame(x=c(-1, 1), y=c(-1, 1))
-ggplot(data=sessionMerge, aes(x=(gr1 + gr2) / 2, y=gr12)) + 
+ggplot(data=sessionMerge, aes(x=predictedGR, y=gr12)) + 
   geom_point() +
   geom_smooth(method=lm) +
   coord_equal(xlim=c(-1, 1), ylim=c(-1, 1)) +
@@ -268,7 +281,7 @@ ggplot(data=sessionMerge, aes(x=(gr1 + gr2) / 2, y=gr12)) +
 ggsave("prediction_gr.pdf")
 
 unity = data.frame(x=c(-1, 1), y=c(-1, 1))
-ggplot(data=sessionMerge, aes(x=(yb1 + yb2) / 2, y=yb12)) + 
+ggplot(data=sessionMerge, aes(x=predictedYB, y=yb12)) + 
   geom_point() +
   geom_smooth(method=lm) +
   coord_equal(xlim=c(-1, 1), ylim=c(-1, 1)) +
@@ -285,11 +298,10 @@ ggsave("prediction_yb.pdf")
 Results of linear regression (gr dimension followed by yb):
 ```{r, echo=FALSE}
 # A linear model predicts the results based on an average of the individual responses.
-mod <- lm((gr1 + gr2) / 2 ~ gr12, sessionMerge)
+mod <- lm(predictedGR ~ gr12, sessionMerge)
 summary.lm(mod)
 
-
-mod <- lm((yb1 + yb2) / 2 ~ yb12, sessionMerge)
+mod <- lm(predictedYB ~ yb12, sessionMerge)
 summary.lm(mod)
 ```
 
@@ -298,19 +310,12 @@ summary.lm(mod)
 
 A simple linear model captured a large fraction of the variance (>72%). However, there were some pairs that deviated substantially from the best fit line. We wondered whether the deviation from linearity might be predicted by the sub-class of the two cones. For instance, do an L- and M-cone interact in a non-linear manner, while two L or two M-cones sum linearly?
 
-```{r, echo=FALSE}
-# Add a column w difference from prediction
-sessionMerge <- mutate(sessionMerge, 
-                       diff_from_prediction=saturation12 - 
-                         ((saturation1 + saturation2) / 2))
-
-```
-
 We found the saturation for each pair and subtracted it from the average of the two cones probed alone. Those results are plotted below. A unity line represents the condition where the observed saturation judgment was predicted exactly by the average of individual responses. Notice that the L+L and M+M pairs tend to fall above the unity line -- particularly at higher saturation values. In contrast, the L+M pairs fall below the line. These observations indicate that the cones with the same spectral type produced slightly more saturated reports than predicted by the average of their individual responses.
 
 ```{r, fig.height=3, fig.width=5, echo=FALSE, message=FALSE}
+
 ggplot(data=filter(sessionMerge, typeID > 3), 
-       aes(x=(saturation1 + saturation2) / 2, y=saturation12, color=as.factor(typeID))) + 
+       aes(x=predictedSaturation, y=saturation12, color=as.factor(typeID))) + 
   geom_point() + 
   coord_equal(xlim=c(0, 1), ylim=c(0, 1)) +
   scale_color_manual(values = c("green", "yellow", "red"), name="spectral type",
@@ -328,7 +333,7 @@ We quantified this trend directly by taking the difference between the observed 
 
 ```{r, fig.height=3, fig.width=5, echo=FALSE, message=FALSE}
 ggplot(data=filter(sessionMerge, typeID > 3), 
-       aes(x=saturation12 - ((saturation1 + saturation2) / 2), 
+       aes(x=saturation12 - (predictedSaturation), 
            color=as.factor(typeID))) + 
   geom_freqpoly(binwidth=0.1) +
   scale_color_manual(
