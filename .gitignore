@@ -5,3 +5,4 @@ analyses.R
 old/*
 .log
 *.log
+figures/*
