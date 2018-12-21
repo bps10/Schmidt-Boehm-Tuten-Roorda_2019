@@ -1,0 +1,111 @@
+---
+title: ' Spatial summation of individual cones in human color vision'
+author: '[Brian P. Schmidt](https://bps10.github.io), Alexandra E. Boehm, William S. Tuten, Austin Roorda'
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  html_notebook: default
+---
+
+# Data processing
+
+Below we will load the raw data and do some light processing: including filtering out bad trials, computing summary statistics and sanity checking. 
+
+1. The raw trial data was read from a CSV file. The dataset contains nearly 5,000 trials completed by three subjects.
+
+```{r results="hide", message=FALSE}
+setwd("~/R/TwoConeColorSummation")
+library(tidyverse)
+library(ggthemes)
+```
+
+```{r, message=FALSE}
+trial_data <- read_csv('all_trial_data.csv')
+# The column isPair is meant to be a logical.
+trial_data <- mutate(trial_data, isPair=as.logical(isPair))
+summary(select(trial_data, yb, gr, delivery_error, lConeNeighbors, isPair))
+
+# set the colors that will be used in plots below.
+red <- "#e84040"
+green <-"#40c631"
+blue <- "#4042e8"
+yellow <- "#e8df40"
+gray <- "#595959"
+```
+
+2. Trials with delivery errors greater than 0.35 or less than 0.01 arcmin (values below 0.01 do not occur naturally) were considered bad deliveries. In those trials, we cannot be confident that the correct cone was targeted. After removing bad trials (3.6%), 4,788 trials remained for further analysis. Below, we see the distribution of delivery errors was roughly normal with a mean of 0.19 arcmin and a standard deviation of 0.036. 
+
+```{r delivery, , fig.height=2, fig.width=4}
+trial_data <- trial_data %>%
+  filter(., delivery_error < 0.35) %>%
+  filter(., delivery_error > 0.01)
+
+summarize(trial_data, mean=mean(delivery_error), 
+          std=sd(delivery_error), N=length(delivery_error))
+
+ggplot(trial_data, aes(delivery_error)) + 
+  geom_histogram(bins = 30)
+```
+
+3. Frequency of seeing (FoS) was computed for S- and L/M-cones and serves as a sanity check. FoS should fall close to zero when an S-cone was targeted because they are insensitive to the stimulus. When an L/M-cone was targeted FoS should have been close to 0.85 since the intensity of each flash was scaled to achieve 85% FoS via a detection task. Below we see that these expectations were approximately borne out. Trials that either targeted an S-cone or were not detected were not analyzed further. 
+
+```{r}
+Scones <- filter(trial_data, type1 == 1 | type2 == 1)
+Scones <- filter(Scones, isPair == FALSE)
+
+print(paste(c('S-cone FoS: ', 
+              round(sum(!is.na(Scones$yb)) / length(Scones$delivery_error) * 100, 1)), 
+            collapse = ' '))
+print(paste(c('L/M-cone FoS: ', 
+              round(sum(!is.na(trial_data$yb)) / length(trial_data$delivery_error) * 100, 1)), 
+            collapse = ' '))
+
+# Now filter out bad trials
+trial_data <- filter(trial_data, type1 != 1 & type2 != 1)
+trial_data <- filter(trial_data, !is.na(yb))
+```
+
+4. The remaining dataset contained trials in which individual or pairs of L- and M-cones were stimulated (N=4,057). For some analyses, we wanted to know both the type tested and whether it was a pair or a single cone. To facilitate these analyses, a type ID was created in which  unknown-cone = 0, unknown-pair=1, 1M=2, 1L=3, 2M=4, L+M=5 and 2L=6. Note: S-cones were already removed from the data and the mosaic of subject 20075 has not been classified.
+
+```{r}
+trial_data <- trial_data %>%
+  mutate(., typeID=if_else(isPair, type1 + type2, type1)) %>%
+  mutate(., typeID=if_else(typeID == 0, 
+                           if_else(isPair, as.integer(1), as.integer(0)), as.integer(typeID))) %>%
+  mutate(., typeIDstr=factor(typeID, labels = 
+                               c('unknown-cone', 'unknown-pair', 'M-cone', 
+                                 'L-cone', 'M+M-pair', 'L+M-pair', 'L+L-pair')))
+
+tally(trial_data)
+```
+
+5. Finally, saturation was computed from a sum of the absolute values of the green-red (gr) and yellow-blue (yb) dimensions ($\mid yb \mid + \mid gr \mid$). Below we see a plot of saturation as a function of type ID. Saturation was similar across all cone types, with exception of the unidentified cones in S20075. This subject reported more saturated sensations than the other two subjects.
+
+```{r, fig.height=3, fig.width=9, message=FALSE}
+trial_data <- mutate(trial_data, saturation = abs(yb) + abs(gr))
+
+ggplot(trial_data, aes(x=saturation)) + 
+  geom_histogram(binwidth=0.1) + facet_grid(. ~ typeIDstr)
+
+```
+
+
+```{r}
+
+trial_data %>%
+  select(., -x1, -x2, -y1, -y2, -session, -trial, -type1, -type2, -masterID1, -masterID2) %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_histogram()
+
+```
+
+```{r}
+# Save the data for analyses.
+write_csv(trial_data, 'filtered_data.csv')
+
+```

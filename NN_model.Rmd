@@ -1,0 +1,204 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(keras)
+library(ggplot2)
+```
+
+
+```{r}
+# Some memory clean-up
+K <- backend()
+K$clear_session()
+```
+
+```{r}
+trial_data <- read_csv('filtered_data.csv')
+
+head(trial_data)
+
+trial_data <- trial_data %>%
+  mutate(., 
+         yb=(yb + 1) / 2,
+         gr=(gr + 1) / 2)
+
+```
+```{r}
+minTrials = 4
+singleConesSummary <- trial_data %>%
+  select(., -typeIDstr) %>%
+  filter(., isPair==FALSE) %>% 
+  group_by(., subject, session, masterID1) %>%   
+  summarise_all(., c("mean", "length")) %>%
+  filter(., yb_length >= minTrials) %>%
+  select(., -contains("_length")) %>%
+  rename_(.dots=setNames(names(.), gsub("_mean", "", names(.))))
+
+twoConesSummary <- trial_data %>%
+  select(., -typeIDstr) %>%
+  filter(., isPair==TRUE) %>% 
+  group_by(., subject, session, masterID1, masterID2) %>%
+  summarise_all(., c("mean", "length")) %>%
+  filter(., yb_length >= minTrials) %>%
+  select(., -contains("_length")) %>%
+  rename_(.dots=setNames(names(.), gsub("_mean", "", names(.))))
+
+merged1 <- merge(twoConesSummary, 
+           select(singleConesSummary, subject, 
+                  session, masterID1, yb, gr, lConeNeighbors), 
+           by=c("subject", "session", "masterID1")) %>% 
+  rename(., yb12=yb.x, gr12=gr.x, yb1=yb.y, gr1=gr.y,
+                  lConeNeighbors12=lConeNeighbors.x, 
+                  lConeNeighbors1=lConeNeighbors.y)
+
+sessionMerge <- merged1 %>% 
+  merge(., select(singleConesSummary, subject, session,
+                  masterID1, yb, gr, lConeNeighbors), 
+        by.x=c("subject", "session", "masterID2"),
+        by.y=c("subject", "session", "masterID1")) %>% 
+  rename(., yb2=yb, gr2=gr, lConeNeighbors2=lConeNeighbors) %>%
+  mutate(., saturation12=abs(yb12) + abs(gr12),
+         saturation1=abs(yb1) + abs(gr1),
+         saturation2=abs(yb2) + abs(gr2))
+```
+
+```{r}
+
+filtered_data <- sessionMerge %>% 
+  filter(., subject != '20075L') %>%
+  mutate(., 
+         yb_average = (yb1 + yb2) / 2,
+         gr_average = (gr1 + gr2)/ 2) %>%
+  select(., delivery_error, distance_btwn_cones_arcmin, lConeNeighbors12, typeID, 
+         distance_to_Scone_1, distance_to_Scone_2,
+         yb_average, gr_average, yb12, gr12)
+  
+```
+
+```{r}
+randomized_data <- sample_frac(filtered_data, 1)
+n_examples = as.integer(tally(randomized_data))
+train_n = round(n_examples * 0.85)
+
+train_data <- randomized_data[1:train_n, ]
+validation_data <- randomized_data[train_n:n_examples, ]
+
+train_features <- train_data %>% 
+  select(., delivery_error, distance_btwn_cones_arcmin, lConeNeighbors12, typeID, 
+         distance_to_Scone_1, distance_to_Scone_2,
+         gr_average, yb_average)
+train_targets <- train_data %>% select(., yb12, gr12)
+
+validation_features <- validation_data %>%
+  select(., delivery_error, distance_btwn_cones_arcmin, lConeNeighbors12, typeID, 
+         distance_to_Scone_1, distance_to_Scone_2,
+         gr_average, yb_average)
+validation_targets <- validation_data %>% select(., yb12, gr12)
+
+mean <- apply(train_features, 2, mean)
+std <- apply(train_features, 2, sd)
+train_features <- scale(train_features, center = mean, scale = std)
+validation_features <- scale(validation_features, center = mean, scale = std)
+
+
+```
+
+```{r}
+# Because we will need to instantiate the same model multiple times,
+# we use a function to construct it.
+build_model <- function() {
+  model <- keras_model_sequential() %>% 
+    layer_dense(units = 5, activation = "sigmoid",
+                input_shape = dim(train_features)[[2]]) %>% 
+    layer_dense(units = 2, activation = "sigmoid")
+  
+  model %>% compile(
+    optimizer = "rmsprop", 
+    loss = "mse", 
+    metrics = "mae"
+  )
+}
+```
+
+```{r}
+k <- 4
+indices <- sample(1:nrow(train_features))
+folds <- cut(indices, breaks = k, labels = FALSE)
+num_epochs <- 25
+all_scores <- c()
+for (i in 1:k) {
+  cat("processing fold #", i, "\n")
+  
+  # Prepare the validation data: data from partition # k
+  val_indices <- which(folds == i, arr.ind = TRUE) 
+  val_data <- train_features[val_indices,]
+  val_targets <- train_targets[val_indices, ]
+  
+  # Prepare the training data: data from all other partitions
+  partial_train_data <- train_features[-val_indices,]
+  partial_train_targets <- train_targets[-val_indices,]
+  
+  # Build the Keras model (already compiled)
+  model <- build_model()
+  
+  # Train the model (in silent mode, verbose=0)
+  model %>% fit(as.matrix(partial_train_data), 
+                as.matrix(partial_train_targets),
+                epochs = num_epochs, batch_size = 1, verbose = 0)
+                
+  # Evaluate the model on the validation data
+  results <- model %>% evaluate(as.matrix(val_data), 
+                                as.matrix(val_targets), verbose = 0)
+  all_scores <- c(all_scores, results$mean_absolute_error)
+}  
+```
+
+```{r}
+all_scores
+```
+
+```{r}
+mean(all_scores)
+```
+
+
+```{r}
+# Some memory clean-up
+K <- backend()
+K$clear_session()
+```
+
+```{r}
+model <- build_model()
+model %>% fit(as.matrix(train_features), 
+              as.matrix(train_targets), 
+              epochs = 25, 
+              batch_size = 1)
+
+metrics <- model %>% evaluate(as.matrix(validation_features), as.matrix(validation_targets), verbose = 0)
+metrics
+
+```
+
+```{r}
+predicted <-  model %>% 
+  predict(as.matrix(train_features))
+
+pscaled <- ((predicted * 2) - 1)
+(qplot(pscaled[,2], (train_targets$gr12 * 2) - 1) +
+    coord_equal(xlim=c(-1, 1), ylim=c(-1, 1))
+  )
+
+
+predicted <- model %>%
+  predict(as.matrix(validation_features))
+
+(qplot((predicted[, 2] * 2) - 1, (validation_targets$gr12 * 2) - 1) +
+    coord_equal(xlim=c(-1, 1), ylim=c(-1, 1))
+  )
+
+```

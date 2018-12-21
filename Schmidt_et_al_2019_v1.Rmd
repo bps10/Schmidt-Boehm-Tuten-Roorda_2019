@@ -1,5 +1,5 @@
 ---
-title: ' Spatial summation of signals from individual cones in human color vision'
+title: ' Spatial summation of individual cones in human color vision'
 author: '[Brian P. Schmidt](https://bps10.github.io), Alexandra E. Boehm, William S. Tuten, Austin Roorda'
 date: "`r Sys.Date()`"
 output:
@@ -45,6 +45,7 @@ trial_data <- read_csv('all_trial_data.csv')
 trial_data <- mutate(trial_data, isPair=as.logical(isPair))
 summary(select(trial_data, yb, gr, delivery_error, lConeNeighbors, isPair))
 
+# set the colors that will be used in plots below.
 red <- "#e84040"
 green <-"#40c631"
 blue <- "#4042e8"
@@ -95,7 +96,6 @@ trial_data <- trial_data %>%
                                c('unknown-cone', 'unknown-pair', 'M-cone', 
                                  'L-cone', 'M+M-pair', 'L+M-pair', 'L+L-pair')))
 
-write_csv(trial_data, 'filtered_data.csv')
 tally(trial_data)
 ```
 
@@ -106,6 +106,8 @@ trial_data <- mutate(trial_data, saturation = abs(yb) + abs(gr))
 
 ggplot(trial_data, aes(x=saturation)) + 
   geom_histogram(binwidth=0.1) + facet_grid(. ~ typeIDstr)
+
+write_csv(trial_data, 'filtered_data.csv')
 ```
 
 # Results
@@ -275,6 +277,12 @@ scatterplotMatrix(twoConesSummary[ , c("yb", "gr", "saturation",
                   diagonal=list(method ="histogram"),
                   ellipse=FALSE)
 
+corrgram(twoConesSummary[ , c("yb", "gr", "saturation", 
+                                      "lConeNeighbors",
+                                      "distance_btwn_cones_arcmin",
+                                      "distance_to_Scone_1", "distance_to_Scone_2")], 
+         order=TRUE, lower.panel=panel.shade,
+         upper.panel=panel.pie, text.panel=panel.txt)
 ```
 
 None of the above correlations were statistically significant with the exception of the relationship between gr and yb. The local neighborhood surrounding a cone is typically thought to be an important factor in generating color sensations. However, we did not find a statistical relationship. The distance between cones may also be an important factor influencing appearance. Neither color nor saturation judgments were correlated with the distance between targeted cones (plotted here in pixels). Cone pairs were never separated by more than one cone, which may explain why we did not detect a relationship. Moreover, the subjects verbally reported that the flashes always appeared as a single uniformly colored dot. Over these very small spatial distances, the visual system appears to be yoking neuronal activities together. In the future, systematically varying the distance between stimulated pairs will be an informative exercise. At a certain critical distance, the points of light will be seen as two spatially distinct dots. It is less clear at what distance the points will be perceived as two distinct colors.
