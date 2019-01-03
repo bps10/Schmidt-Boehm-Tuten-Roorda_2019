@@ -6,3 +6,5 @@ old/*
 .log
 *.log
 figures/*
+03_Extra-Analyses.Rmd
+NN_model.*

@@ -9,7 +9,15 @@ output:
     df_print: paged
 ---
 
+# Introduction
 
+A central goal of vision science is to understand how signals from photoreceptors are transformed into sight and the limitations each stage of processing imposes on perception. Photoreceptors provide an organism with real-time information about the environment. However, the signals conveyed by individual neurons are noisy and ambiguous.  One strategy for reducing uncertainty is to pool signals across multiple detectors. Under low light conditions, for example, the visual system combines signals from many hundreds of rod and cone photoreceptors in order to boost sensitivity \cite{Rieke2008}. One drawback of signal pooling is a loss in spatial resolution: both acuity and contrast sensitivity are reduced under low-light levels \cite{Barbur2010}. We studied the influence of spatial pooling on the color appearance of cone-targeted spots.
+
+# Results
+
+## Load data and import libraries.
+
+First load in data and set some parameters that will be used during plotting later.
 ```{r results="hide", message=FALSE}
 setwd("~/R/TwoConeColorSummation")
 library(tidyverse)
@@ -32,13 +40,15 @@ trial_data <- read_csv('filtered_data.csv')
 head(trial_data)
 ```
 
-# Results
-
 ## Example session
 
-```{r, fig.height=3, fig.width=4.5, message=FALSE}
+In a previous experiment, the one and two cone conditions were equated for detectability. We subsequently collected appearance measurements. All other stimulus conditions were identical to the detection task. Three cones were selected for study in each session (Fig~\ref{methods}A). On each trial either a single cone or a pair was targeted. After each flash, the subject judged the color of the spot using a hue and saturation scaling paradigm \cite{Gordon1994,Schmidt2018a}. Each cone and pair was tested twelve times (72 trials per session). A total of 198 pairs were tested across three subjects. Hue and saturation scaling data were transformed into a color opponent representation. For each trial, the degree of perceived greenness versus redness and yellowness versus blueness was computed from percentage ratings as follows: $gr = (green\% - red\%) / 100\%$ and $yb = (yellow\% - blue\%) / 100\%$. In this representation, saturation is expressed as the distance from the origin (in city block metric). A pure white response falls at the origin and a maximally saturated report falls along the outer diamond. 
 
-(example <- trial_data %>%
+The results of one session are plotted in Fig~\ref{methods}B. In this example, cone 1 was an M-cone and had a bias towards green. Cone 2 was an L-cone and elicited predominantly white reports. Cone 3, also an L-cone, was rated reddish-yellow (orange) with medium saturation. The motivation for this study was to understand the algorithm the visual system uses when combining information across cone pairs. In the example, when Cone 1 was targeted together with either Cone 2 or Cone 3, the average report was desaturated. In comparison, when Cone 2 and 3 were targeted they elicited a medium saturated orange report. Below, we analyze the results from all sessions and subjects.
+
+```{r, fig.height=3, fig.width=4.5, message=FALSE, results=FALSE}
+
+example <- trial_data %>%
   filter(., subject == '20076R', session== 4) %>%
   group_by(., masterID1, masterID2, isPair) %>% 
   summarise(., yb_mean=signif(mean(yb), 3), 
@@ -46,7 +56,6 @@ head(trial_data)
             gr_mean=signif(mean(gr), 3), 
             gr_sem=signif(sd(gr) / sqrt(length(gr)), 3), N=length(gr),
             typeIDstr=typeIDstr[1])
-)
 
 
 boundary <- data.frame(x=c(-1, 0, 1, 0, -1), y=c(0, 1, 0, -1, 0))
@@ -76,12 +85,44 @@ ggsave("figures/example_session.pdf")
 
 ```
 
-
 ## Variability in sensations from cones with the same sensitivity
 
-We first grouped each trial based on the subject and sub-type of cone or pair probed. We then found them mean, standard deviation and count for each group. The results are reported in a table below. In both subjects with classified cones, individual and pairs of M-cones produced gr means that were greater than zero, while L-cone conditions led to negative values. This observation is consistent with a predictive relationship between cone type and color report, as found previously (Sabesan et al. 2016; Schmidt et al. 2018).
 
-```{r, fig.height=3, fig.width=4.5, message=FALSE}
+
+
+The motivating question behind these experiments was how does the visual system combine inputs from cones when making color appearance judgments? To begin to answer this question, we grouped each trial based on which cone or pair was probed. The results are reported in a table below. In both subjects with classified cones, individual and pairs of M-cones produced gr means that were greater than zero, while L-cone conditions led to negative values. This observation is consistent with a predictive relationship between cone type and color report, as found previously (Sabesan et al. 2006; Schmidt et al. 2018).
+
+Each point in these plots represents the mean response measured from a single cone or a pair. This plot illustrates the variability in responses across cones/pairs and between subjects. There are a few features to note. Firstly, within a single subject, there was considerable variability between cones and pairs with the same spectral sensitivity. Similar variability in sensations from single cones has been reported previously (Hofer et al. 2005; Sabesan et al. 2016; Schmidt et al. 2018). This is the first report of variability in sensations elicited from pairs of cones. Secondly, there were individual differences in color responses: S20075 used blue more frequently than the two other subjects and S10001 did not report yellow on any trials. However, the general patterns are similar. Most of the variance was found along the green-red dimension; there were few points that fell in the blueish-red or greenish-yellow quadrants. In the two subjects with classified mosaics, we additionally found L-cone targeted trials tended produce a reddish bias, while M-cones were biased towards green. These patterns were similar to previous reports from single-cone (Sabesan et al. 2016; Schmidt et al. 2018) and large-field studies (DeValois et al. 1997). 
+
+```{r, fig.height=3, fig.width=11, message=FALSE, include=FALSE}
+singleAndPairs <- trial_data %>%
+  select(., -typeIDstr) %>%
+  group_by(., subject, masterID1, masterID2, isPair) %>% 
+  summarise_all(., mean)
+
+(ind <- ggplot(data=singleAndPairs, aes(x=yb, y=gr, color=as.factor(typeID), shape=isPair)) + 
+  geom_point(alpha=0.76, size=0.8) +
+  facet_grid(. ~ subject) +
+  geom_rug(alpha=0.5) + 
+  coord_equal(xlim=c(-1, 1), ylim=c(-1, 1)) + 
+  xlab('(yellow - blue) / total') + ylab('(green - red) / total') + 
+  scale_color_manual(
+    values = c(gray, gray, green, red, green, yellow, red), 
+    name="spectral type",
+    labels = c("unknown-cone", "unknown-pair", "M-cone", "L-cone", "M+M-pair", "L+M-pair", "L+L-pair")) +
+  #scale_color_brewer(palette = "Spectral") +
+  geom_path(data = boundary, aes(x=x, y=y), colour='gray', linetype=2, inherit.aes = F) +
+  theme_bw(base_size = 15) + 
+  theme(legend.position="none"))
+
+ggsave("figures/lms_UAD.pdf")
+
+
+```
+
+To better appreciate the influence of cone type and number of cones targeted on color reports, data was pooled across subjects and grouped according to the type of cone or pair probed. The mean and standard error for each group is shown in the right most plot below. When an individual or pair of M-cones was targeted the average $gr$ response was greater than zero indicating a bias towards green. In comparison, the average L-cone(s) elicited biases towards red and yellow. Together these cone type specific differences in color reports were consistent with a predictive relationship between cone type and color report, as previously reported (Sabesan et al. 2016; Schmidt et al. 2018). Two cones with the same photopigment tended to elicit slightly more saturated reports than single cone trials. On the other hand, one L- and one M-cone targeted together tended to produce desaturated reports.
+
+```{r, fig.height=3, fig.width=4.5, message=FALSE, results='hide', include=FALSE}
 (typeGroup <- trial_data %>%
   #filter(., subject != '20075L') %>% 
    group_by(., subject, masterID1, masterID2, isPair, typeIDstr) %>%
@@ -112,40 +153,15 @@ ggsave("figures/lms_UAD_means.pdf")
 
 ```
 
-Next, data was further grouped by the cone or pair targeted (masterID). The mean of each location is represented below.
-
 ```{r, fig.height=3, fig.width=11, message=FALSE}
-singleAndPairs <- trial_data %>%
-  select(., -typeIDstr) %>%
-  group_by(., subject, masterID1, masterID2, isPair) %>% 
-  summarise_all(., mean)
 
-(ind <- ggplot(data=singleAndPairs, aes(x=yb, y=gr, color=as.factor(typeID), shape=isPair)) + 
-  geom_point(alpha=0.76, size=0.8) +
-  facet_grid(. ~ subject) +
-  geom_rug(alpha=0.5) + 
-  coord_equal(xlim=c(-1, 1), ylim=c(-1, 1)) + 
-  xlab('(yellow - blue) / total') + ylab('(green - red) / total') + 
-  scale_color_manual(
-    values = c(gray, gray, green, red, green, yellow, red), 
-    name="spectral type",
-    labels = c("unknown-cone", "unknown-pair", "M-cone", "L-cone", "M+M-pair", "L+M-pair", "L+L-pair")) +
-  #scale_color_brewer(palette = "Spectral") +
-  geom_path(data = boundary, aes(x=x, y=y), colour='gray', linetype=2, inherit.aes = F) +
-  theme_bw(base_size = 15) + 
-  theme(legend.position="none"))
-
-ggsave("figures/lms_UAD.pdf")
-
-p <- grid.arrange(ind, avg, widths=2.5:1)
+(p <- grid.arrange(ind, avg, widths=2.5:1))
 ggsave("figures/UAD_combined.pdf", p)
 ```
 
-These plots illustrate the spread of responses collected from each cone or pair tested in each subject. There are a few features to note. Firstly, there were individual differences in color responses. S20075 used blue more frequently than the two other subjects and S10001 did not report yellow on any trials. However, the general patterns are similar. Most of the variance was found along the green-red dimension and there were few points that fell in the blueish-red or greenish-yellow quadrants These patterns are similar to previous reports (Schmidt et al. 2018). In the two subjects with classified mosaics, we additionally see that L-cone targeted trials tended to fall along the red region of this space, while M-cones were more likely to fall on the green side of the y-axis.
-
 ## Mosaic parameters do not predict responses
 
-Also similar to previous findings, color reports varied even between cones with the same photopigment (Schmidt et al. 2018). Some L-cones, for instance, elicited highly saturated red sensations, while a majority produce white or desaturated pink reports. We next asked whether the variability in sensations between cones with the same sensitivity could be explained by low level features of the mosaic. Specifically, can we predict whether an L-cone will produce a saturated red or a desaturated pink based on the surrounding cone types or the delivery error? And in the case of cone pairs, did the distance between the two cones influence color appearance? To answer these question, we grouped responses according to the number of cones targeted (one or two), the session in which trial occurred and the specific cone(s) that was targeted. The mean and count was then computed for each cone(s). Only those cones pairs which had at least four good trials were analyzed.
+The plot above demonstrates that color reports varied even between cones with the same photopigment (Schmidt et al. 2018). Some L-cones, for instance, elicited highly saturated red sensations, while a majority produce white or desaturated pink reports. We next asked whether the variability in sensations between cones with the same sensitivity could be explained by low level features of the mosaic. Specifically, can we predict whether an L-cone will produce a saturated red or a desaturated pink based on the surrounding cone types or the delivery error? And in the case of cone pairs, did the distance between the two cones influence color appearance? To answer these question, we grouped responses according to the number of cones targeted (one or two), the session in which trial occurred and the specific cone(s) that was targeted. The mean and count was then computed for each cone(s). Only those cones pairs which had at least four good trials were analyzed.
 
 ```{r}
 minTrials <- 4
@@ -226,11 +242,11 @@ predictors = c("yb", "gr", "saturation", "lConeNeighbors",
 corr_analysis(twoConesSummary, predictors)
 ```
 
-None of the above correlations were statistically significant with the exception of the relationship between gr and yb. The local neighborhood surrounding a cone is typically thought to be an important factor in generating color sensations. However, we did not find a statistical relationship. The distance between cones may also be an important factor influencing appearance. Neither color nor saturation judgments were correlated with the distance between targeted cones (plotted here in pixels). Cone pairs were never separated by more than one cone, which may explain why we did not detect a relationship. Moreover, the subjects verbally reported that the flashes always appeared as a single uniformly colored dot. Over these very small spatial distances, the visual system appears to be yoking neuronal activities together. In the future, systematically varying the distance between stimulated pairs will be an informative exercise. At a certain critical distance, the points of light will be seen as two spatially distinct dots. It is less clear at what distance the points will be perceived as two distinct colors.
+None of the above correlations were statistically significant with the exception of relationships that were known to be dependent, such as between gr and yb. The local neighborhood surrounding a cone is typically thought to be an important factor in generating color sensations. However, we did not find a statistical relationship. The distance between cones may also be an important factor influencing appearance. Neither color nor saturation judgments were correlated with the distance between targeted cones (plotted here in pixels). Cone pairs were never separated by more than one cone, which may explain why we did not detect a relationship. Moreover, the subjects verbally reported that the flashes always appeared as a single uniformly colored dot. Over these very small spatial distances, the visual system appears to be yoking neuronal activities together. In the future, systematically varying the distance between stimulated pairs will be an informative exercise. At a certain critical distance, the points of light will be seen as two spatially distinct dots. It is less clear at what distance the points will be perceived as two distinct colors.
 
 ## Two cone responses are an average of individual reports
 
-While features of the mosaic and physical stimulus did not predict color reports, we hypothesized that the sensations recorded from individual cones would be predictive of paired stimulation conditions. To address this question, we matched the mean response from each cone pairs with the the mean report from each cone tested individually.
+While features of the mosaic and physical stimulus did not predict color reports, we hypothesized that the sensations recorded from individual cones would be predictive of paired stimulation conditions. To address this question, we matched the mean response from each cone pair with the the mean report from each cone tested individually.
 
 ```{r, warning=FALSE,  message=FALSE}
 merged1 <- merge(twoConesSummary, 
@@ -314,7 +330,7 @@ A simple linear model captured a large fraction of the variance (>72%). However,
 
 We found the saturation for each pair and subtracted it from the average of the two cones probed alone. Those results are plotted below. A unity line represents the condition where the observed saturation judgment was predicted exactly by the average of individual responses. Notice that the L+L and M+M pairs tend to fall above the unity line -- particularly at higher saturation values. In contrast, the L+M pairs fall below the line. These observations indicate that the cones with the same spectral type produced slightly more saturated reports than predicted by the average of their individual responses.
 
-```{r, fig.height=3, fig.width=5, message=FALSE}
+```{r, fig.height=3, fig.width=5, message=FALSE, include=FALSE}
 
 (scatLM <- sessionMerge %>%
    filter(., typeID == 1 | typeID > 3) %>%
@@ -333,9 +349,6 @@ We found the saturation for each pair and subtracted it from the average of the 
 )
 
 ggsave('figures/observed-predicted_scatter.pdf')
-
-```
-```{r, fig.height=3, fig.width=5, message=FALSE}
 
 scatUn <- sessionMerge %>%
    filter(., typeID == 1) %>%
@@ -380,7 +393,7 @@ ggsave('figures/observed-predicted.pdf', p)
 
 ```
 
-L+M pairs have a mean that is significantly different from zero.
+L+M pairs had a mean that was significantly different from zero.
 
 ```{r}
 
@@ -390,7 +403,7 @@ t.test(sessionMerge %>%
        )
 ```
 
-L+L and M+M pairs have a mean that is significantly different from zero, but in the opposite direction.
+L+L and M+M pairs had a mean that was significantly different from zero, but in the opposite direction.
 
 ```{r}
 t.test(sessionMerge %>% 
@@ -399,6 +412,7 @@ t.test(sessionMerge %>%
        )
 ```
 
+Unclassified cones were significantly more saturated than predicted.
 ```{r}
 
 t.test(sessionMerge %>% 
@@ -407,7 +421,7 @@ t.test(sessionMerge %>%
        )
 ```
 
-Finally, L+M pairs are significantly different from the population of responses collected from L+L and M+M pairs.
+Finally, L+M pairs were significantly different from the population of responses collected from L+L and M+M pairs.
 ```{r}
 t.test(sessionMerge %>% 
          filter(., typeID == 5) %>% 

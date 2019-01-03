@@ -3,17 +3,17 @@ title: ' Spatial summation of individual cones in human color vision'
 author: '[Brian P. Schmidt](https://bps10.github.io), Alexandra E. Boehm, William S. Tuten, Austin Roorda'
 date: "`r Sys.Date()`"
 output:
-  pdf_document: default
+  html_notebook: default
   html_document:
     df_print: paged
-  html_notebook: default
+  pdf_document: default
 ---
 
 # Data processing
 
-Below we will load the raw data and do some light processing: including filtering out bad trials, computing summary statistics and sanity checking. 
+Before beginning analyses, we will load the raw data and do some light processing, including: filtering out bad trials, computing summary statistics and sanity checking. 
 
-1. The raw trial data was read from a CSV file. The dataset contains nearly 5,000 trials completed by three subjects.
+1. Read the raw trial data from a CSV file. The dataset contains nearly 5,000 trials completed by three subjects.
 
 ```{r results="hide", message=FALSE}
 setwd("~/R/TwoConeColorSummation")
@@ -26,16 +26,9 @@ trial_data <- read_csv('all_trial_data.csv')
 # The column isPair is meant to be a logical.
 trial_data <- mutate(trial_data, isPair=as.logical(isPair))
 summary(select(trial_data, yb, gr, delivery_error, lConeNeighbors, isPair))
-
-# set the colors that will be used in plots below.
-red <- "#e84040"
-green <-"#40c631"
-blue <- "#4042e8"
-yellow <- "#e8df40"
-gray <- "#595959"
 ```
 
-2. Trials with delivery errors greater than 0.35 or less than 0.01 arcmin (values below 0.01 do not occur naturally) were considered bad deliveries. In those trials, we cannot be confident that the correct cone was targeted. After removing bad trials (3.6%), 4,788 trials remained for further analysis. Below, we see the distribution of delivery errors was roughly normal with a mean of 0.19 arcmin and a standard deviation of 0.036. 
+2. Trials with delivery errors greater than 0.35 or less than 0.01 arcmin (values below 0.01 do not occur naturally) were considered bad deliveries. In those trials, we cannot be confident that the correct cone was targeted. After removing bad trials (3.6%), 4,788 trials remained for further analysis. Below, we see the distribution of delivery errors was roughly normal with a mean of 0.19 arcmin and a standard deviation of 0.036 arcmin. 
 
 ```{r delivery, , fig.height=2, fig.width=4}
 trial_data <- trial_data %>%
@@ -67,7 +60,7 @@ trial_data <- filter(trial_data, type1 != 1 & type2 != 1)
 trial_data <- filter(trial_data, !is.na(yb))
 ```
 
-4. The remaining dataset contained trials in which individual or pairs of L- and M-cones were stimulated (N=4,057). For some analyses, we wanted to know both the type tested and whether it was a pair or a single cone. To facilitate these analyses, a type ID was created in which  unknown-cone = 0, unknown-pair=1, 1M=2, 1L=3, 2M=4, L+M=5 and 2L=6. Note: S-cones were already removed from the data and the mosaic of subject 20075 has not been classified.
+4. The remaining dataset contained trials in which individual or pairs of L- and M-cones were stimulated (N=4,057). For some analyses, we wanted to know both the type tested and whether it was a pair or a single cone. To facilitate these analyses, a type ID was created in which  unknown-cone = 0, unknown-pair=1, 1M=2, 1L=3, 2M=4, L+M=5 and 2L=6. Note: S-cones were already removed from the data and the mosaic of S20075 has not been classified.
 
 ```{r}
 trial_data <- trial_data %>%
@@ -91,8 +84,9 @@ ggplot(trial_data, aes(x=saturation)) +
 
 ```
 
+Before saving the data, we visualize each column of the dataset with a histogram to get a better sense of the data. These plots illustrate the distribution of each variable and help make sure there are no outliers or unexpected values. As we can see some of the variables are categorical and some are highly non-gaussian. For instance, `distance_btwn_cones_arcmin` has a large peak at 0 due to single cone trials.
 
-```{r}
+```{r, warning=FALSE,message=FALSE}
 
 trial_data %>%
   select(., -x1, -x2, -y1, -y2, -session, -trial, -type1, -type2, -masterID1, -masterID2) %>%
@@ -103,6 +97,8 @@ trial_data %>%
     geom_histogram()
 
 ```
+
+Finally, we save the filtered dataset for subsequent analysis.
 
 ```{r}
 # Save the data for analyses.
