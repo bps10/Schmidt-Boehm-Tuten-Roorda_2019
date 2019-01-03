@@ -1,5 +1,5 @@
 
-# Two Cone Color Summation
+# Schmidt-Boehm-Tuten-Roorda_2019
 
 This repo contains the raw data and analyses presented in:
 
@@ -10,4 +10,3 @@ All analyses were conducted in the R programming language. Stylized versions of 
 1. [01_Process-Data.nb.html](01_Process-Data.nb.html) takes the raw data in [all_trial_data.csv](all_trial_data.csv) and does some light filtering and sanity checking. The output of this script is [filtered_data.csv](filtered_data.csv).
 
 2. [02_Analyze-Data.nb.html](02_Analyze-Data.nb.html) contains the analyzes that are described in the manuscript.
-
