@@ -18,8 +18,8 @@ A central goal of vision science is to understand how signals from photoreceptor
 ## Load data and import libraries.
 
 First load in data and set some parameters that will be used during plotting later.
-```{r results="hide", message=FALSE}
-setwd("~/R/TwoConeColorSummation")
+```{r results="hide", message=FALSE, warning=FALSE}
+# setwd("~/R/Schmidt-Boehm-Tuten-Roorda_2019")
 library(tidyverse)
 library(ggthemes)
 library(gridExtra)
@@ -32,6 +32,9 @@ green <-"#40c631"
 blue <- "#4042e8"
 yellow <- "#e8df40"
 gray <- "#595959"
+
+# make sure a figures directory exists
+dir.create('figures', showWarnings=FALSE)
 ```
 
 ```{r, message=FALSE}
@@ -44,7 +47,7 @@ head(trial_data)
 
 In a previous experiment, the one and two cone conditions were equated for detectability. We subsequently collected appearance measurements. All other stimulus conditions were identical to the detection task. Three cones were selected for study in each session (Fig~\ref{methods}A). On each trial either a single cone or a pair was targeted. After each flash, the subject judged the color of the spot using a hue and saturation scaling paradigm \cite{Gordon1994,Schmidt2018a}. Each cone and pair was tested twelve times (72 trials per session). A total of 198 pairs were tested across three subjects. Hue and saturation scaling data were transformed into a color opponent representation. For each trial, the degree of perceived greenness versus redness and yellowness versus blueness was computed from percentage ratings as follows: $gr = (green\% - red\%) / 100\%$ and $yb = (yellow\% - blue\%) / 100\%$. In this representation, saturation is expressed as the distance from the origin (in city block metric). A pure white response falls at the origin and a maximally saturated report falls along the outer diamond. 
 
-The results of one session are plotted in Fig~\ref{methods}B. In this example, cone 1 was an M-cone and had a bias towards green. Cone 2 was an L-cone and elicited predominantly white reports. Cone 3, also an L-cone, was rated reddish-yellow (orange) with medium saturation. The motivation for this study was to understand the algorithm the visual system uses when combining information across cone pairs. In the example, when Cone 1 was targeted together with either Cone 2 or Cone 3, the average report was desaturated. In comparison, when Cone 2 and 3 were targeted they elicited a medium saturated orange report. Below, we analyze the results from all sessions and subjects.
+The results of one session are plotted in Fig~\ref{methods}B. In this example, Cone 1 was an M-cone and had a bias towards green. Cone 2 was an L-cone and elicited predominantly white reports. Cone 3, also an L-cone, was rated reddish-yellow (orange) with medium saturation. The motivation for this study was to understand the algorithm the visual system uses when combining information across cone pairs. In the example, when Cone 1 was targeted together with either Cone 2 or Cone 3, the average report was desaturated. In comparison, when Cone 2 and 3 were targeted they elicited a medium saturated orange report. Below, we analyze the results from all sessions and subjects.
 
 ```{r, fig.height=3, fig.width=4.5, message=FALSE, results=FALSE}
 
@@ -60,9 +63,11 @@ example <- trial_data %>%
 
 boundary <- data.frame(x=c(-1, 0, 1, 0, -1), y=c(0, 1, 0, -1, 0))
 
-(examplePlot <- ggplot(data=example, aes(x=yb_mean, y=gr_mean,
-                                         color=interaction(typeIDstr, isPair), 
-                                         shape=isPair)) +
+(examplePlot <- ggplot(data=example, 
+                       aes(x=yb_mean, 
+                           y=gr_mean,
+                           color=interaction(typeIDstr, isPair),
+                           shape=isPair)) +
     geom_point(size=3) + 
     geom_errorbar(aes(x=yb_mean, ymin=gr_mean - gr_sem, ymax=gr_mean + gr_sem)) +
     geom_errorbarh(aes(y=gr_mean, xmin=yb_mean - yb_sem, xmax=yb_mean + yb_sem, height=0.01)) + 
@@ -75,7 +80,6 @@ boundary <- data.frame(x=c(-1, 0, 1, 0, -1), y=c(0, 1, 0, -1, 0))
     geom_text(label=c('1', '1+2', '1+3', '2', '2+3', '3'),
               nudge_x=-0.15) +
     geom_path(data = boundary, aes(x=x, y=y), colour='gray', linetype=2, inherit.aes = F) +
-    #annotate("text", x = -1, y = 1, label = "B") +
     theme_bw(base_size = 15) + 
     theme(legend.position="none")
   )
@@ -86,9 +90,6 @@ ggsave("figures/example_session.pdf")
 ```
 
 ## Variability in sensations from cones with the same sensitivity
-
-
-
 
 The motivating question behind these experiments was how does the visual system combine inputs from cones when making color appearance judgments? To begin to answer this question, we grouped each trial based on which cone or pair was probed. The results are reported in a table below. In both subjects with classified cones, individual and pairs of M-cones produced gr means that were greater than zero, while L-cone conditions led to negative values. This observation is consistent with a predictive relationship between cone type and color report, as found previously (Sabesan et al. 2006; Schmidt et al. 2018).
 
@@ -189,7 +190,7 @@ Below is a matrix of correlation plots for the single cone condition.
 ```{r,message=FALSE}
 
 ptest <- function(mat, ...) {
-  # stolen shamelessly from: http://www.sthda.com/english/wiki/visualize-correlation-matrix-using-correlogram
+  # stolen from: http://www.sthda.com/english/wiki/visualize-correlation-matrix-using-correlogram
     mat <- as.matrix(mat)
     n <- ncol(mat)
     p.mat<- matrix(NA, n, n)
@@ -203,8 +204,6 @@ ptest <- function(mat, ...) {
   colnames(p.mat) <- rownames(p.mat) <- colnames(mat)
   p.mat
 }
-
-
 
 corr_analysis <- function (data, predictors) {
   # scatterplotMatrix with car package
@@ -228,7 +227,8 @@ corr_analysis <- function (data, predictors) {
 
 }
 
-predictors = c("yb", "gr", "saturation", "lConeNeighbors", "distance_to_Scone_1", "distance_to_Scone_2")
+predictors = c("yb", "gr", "saturation", "lConeNeighbors", 
+               "distance_to_Scone_1", "distance_to_Scone_2")
 corr_analysis(singleConesSummary, predictors)
 
 ```
@@ -238,7 +238,8 @@ Two cone condition:
 ```{r, fig.height=7, fig.width=7,  message=FALSE}
 
 predictors = c("yb", "gr", "saturation", "lConeNeighbors",
-               "distance_btwn_cones_arcmin",  "distance_to_Scone_1", "distance_to_Scone_2")
+               "distance_btwn_cones_arcmin",  "distance_to_Scone_1", 
+               "distance_to_Scone_2")
 corr_analysis(twoConesSummary, predictors)
 ```
 

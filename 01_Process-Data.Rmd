@@ -16,7 +16,7 @@ Before beginning analyses, we will load the raw data and do some light processin
 1. Read the raw trial data from a CSV file. The dataset contains nearly 5,000 trials completed by three subjects.
 
 ```{r results="hide", message=FALSE}
-setwd("~/R/TwoConeColorSummation")
+# setwd("~/R/Schmidt-Boehm-Tuten-Roorda_2019")
 library(tidyverse)
 library(ggthemes)
 ```
@@ -60,7 +60,7 @@ trial_data <- filter(trial_data, type1 != 1 & type2 != 1)
 trial_data <- filter(trial_data, !is.na(yb))
 ```
 
-4. The remaining dataset contained trials in which individual or pairs of L- and M-cones were stimulated (N=4,057). For some analyses, we wanted to know both the type tested and whether it was a pair or a single cone. To facilitate these analyses, a type ID was created in which  unknown-cone = 0, unknown-pair=1, 1M=2, 1L=3, 2M=4, L+M=5 and 2L=6. Note: S-cones were already removed from the data and the mosaic of S20075 has not been classified.
+4. The remaining dataset contained trials in which individual or pairs of L- and M-cones were stimulated (N=4,057). For some analyses, we wanted to know both the type tested and whether it was a pair or a single cone. To facilitate these analyses, a type ID was created in which unknown-cone=0, unknown-pair=1, 1M=2, 1L=3, 2M=4, L+M=5 and 2L=6. Note: S-cones were already removed from the data and the mosaic of S20075 has not been classified.
 
 ```{r}
 trial_data <- trial_data %>%
